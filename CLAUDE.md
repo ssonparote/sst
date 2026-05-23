@@ -13,48 +13,185 @@ Building a custom MTB suspension telemetry system based on the open-source **Suf
 - Vital MTB DIY thread: `vitalmtb.com/forums/The-Hub,2/DIY-mtb-telemetry-data,11126`
 - MTB-News.de (German, Toma also posts here): `mtb-news.de/forum/t/diy-telemetrie-data-acquisition-system.971652/`
 
+**Deployment:**
+- Pi server IP: 192.168.0.69
+- Dashboard URL: https://sst.caddy.local
+
 ---
+
+## Hardware Stack (confirmed build order, bottom to top)
+
+1. **Pimoroni LiPo Shim (PIM557)** — soldered to Pico underside pins (VBUS, VSYS, GND, 3V3_EN, 3V3_OUT). Charging via Pico USB. ✅ installed
+2. **Raspberry Pi Pico WH** — male headers pointing down into Adalogger ✅
+3. **Adafruit PicoWbell Adalogger** — stacked above Pico via female socket headers. Has: MicroSD (SDIO), RTC (CR1220 installed ✅), STEMMA QT connector hardwired to GP4/GP5
 
 ## Hardware Inventory (confirmed on hand)
 
-| Component | Part | Role |
+| Component | Part | Status |
 |---|---|---|
-| Microcontroller | Raspberry Pi Pico WH (2022, with headers) | Main DAQ unit |
-| Fork sensor | Spectra Symbol SoftPot (linear membrane pot) | Fork travel via ADC |
-| Rear sensor | AS5600 hall effect rotary sensor + included magnet | Linkage rotation via I2C |
-| Display | NFP1315-45A (SSD1306-equivalent OLED, 128×64, I2C) | Status display on DAQ enclosure — battery level, recording state, WiFi status |
-| Power | Pico W LiPo shim + battery | Field use (USB for bench testing) |
+| Microcontroller | Raspberry Pi Pico WH | ✅ in stack |
+| Logger/RTC | Adafruit PicoWbell Adalogger | ✅ in stack |
+| Power management | Pimoroni LiPo Shim PIM557 | ✅ installed |
+| Battery | Li-ion 18650 3.7V 2.2Ah (with connector) | ✅ on hand |
+| Fork sensor | Spectra Symbol SP-L-0200-103-1%-RLU (200mm, 10kΩ, 1%) | ✅ on hand |
+| Rear sensor | AS5600 hall effect rotary encoder + magnet | ✅ on hand, headers soldered |
+| Display | NFP1315-45A (SSD1306-equivalent OLED, 128×64, I2C) | ✅ breadboarded |
+| IMU | Adafruit LSM6DSOX #4438 STEMMA QT | 🔄 ordered |
+| MicroSD card | Any Class 10 A1 | ✅ on hand |
+| RTC backup | CR1220 coin cell | ✅ installed |
+| Buttons | 6mm tactile switches (from Parts Pal) | ✅ on hand |
+| Status LEDs | 5mm red + green (from Parts Pal) | ✅ on hand |
+| Resistors | 560Ω (LED), 100Ω (SoftPot series), 100kΩ (SoftPot pull-down), 1kΩ | ✅ on hand / ordered |
+| Capacitors | 100nF ceramic (SoftPot filter) | ✅ on hand (Parts Pal) |
 
 ---
 
-## Sensor Architecture
+## Confirmed GPIO Pinout
 
-### Rear Shock — AS5600 (stock SST firmware path)
-- **Interface:** I2C (SDA, SCL, 3.3V, GND) — 4 wires
-- **Why I2C not ADC:** Pico ADC has only 7.9 ENOB (effective bits) — too low for precision angle. AS5600 gives 12-bit over I2C.
-- **Resolution at small angles:** At 20° sweep → ~228 counts → ~0.66mm/count over 150mm travel. Acceptable for suspension telemetry.
-- **No firmware changes needed** — AS5600 is the stock SST sensor.
+| GPIO | Pico Pin | Function | Connected To | Notes |
+|---|---|---|---|---|
+| GP2 | 4 | PIO I2C SDA | SSD1306 display | Software I2C, already wired |
+| GP3 | 5 | PIO I2C SCL | SSD1306 display | Software I2C, already wired |
+| GP4 | 6 | I2C0 SDA | LSM6DSOX IMU | Adalogger STEMMA QT hardwired |
+| GP5 | 7 | I2C0 SCL | LSM6DSOX IMU | Adalogger STEMMA QT hardwired |
+| GP6 | 9 | GPIO INPUT | Button LEFT | 6mm tactile, moved from GP4 |
+| GP7 | 10 | GPIO INPUT | Button RIGHT | 6mm tactile, moved from GP5 |
+| GP10 | 14 | GPIO OUTPUT | LED recording (red) | 560Ω series resistor |
+| GP11 | 15 | GPIO OUTPUT | LED WiFi (green) | 560Ω series resistor |
+| GP14 | 19 | I2C1 SDA | AS5600 rear shock | |
+| GP15 | 20 | I2C1 SCL | AS5600 rear shock | |
+| GP17 | 22 | SDIO CLK | MicroSD | Adalogger internal |
+| GP18 | 24 | SDIO CMD | MicroSD | Adalogger internal |
+| GP19 | 25 | SDIO D0 | MicroSD | Adalogger internal |
+| GP20 | 26 | SDIO D1 | MicroSD | Adalogger internal |
+| GP21 | 27 | SDIO D2 | MicroSD | Adalogger internal |
+| GP22 | 29 | SDIO D3 | MicroSD | Adalogger internal |
+| GP26 | 31 | ADC0 | SoftPot wiper (fork) | 100Ω series + 100nF to GND + 100kΩ pull-down |
 
-### Fork — SoftPot (custom, replaces rotary encoder)
-- **Interface:** Analog ADC — 3 wires (3.3V, GND, wiper signal)
-- **Wiring:** 3.3V → one end, GND → other end, wiper → Pico ADC pin (GP26/27/28)
-- **Protection:** 100Ω series resistor on wiper line, 100nF cap from ADC pin to GND
-- **Firmware change needed:** Replace encoder interrupt read with `adc_read()`, scale 0–4095 to 0.0–1.0 float. ~20 lines of change.
-- **Noise mitigation:** RC filter (hardware) + moving average or median filter (firmware)
+Free GPIOs: GP0/GP1 (UART debug), GP8, GP9, GP12, GP13, GP16, GP27, GP28
 
-### Display — SSD1306 OLED (NFP1315-45A)
-- **Interface:** I2C — shares bus with AS5600 (address 0x3C or 0x3D)
-- **AS5600 I2C address:** 0x36 — no conflict
-- **ICM-42688-P I2C address:** 0x68 or 0x69 — no conflict
-- All three devices can share a single I2C bus on the Pico (GP4/GP5)
-- Use for: recording state indicator, WiFi status, battery level, session timer
-- Libraries: standard SSD1306 MicroPython/C libraries widely available
+---
 
-### IMU — 6-axis in main box (to be added)
-- **Recommended part:** ICM-42688-P (significantly better noise floor than MPU-6050)
-- **Interface:** I2C (shares bus with AS5600) or SPI
-- **Directly wired to PCB** — no connector needed
-- **Value:** Correlates frame pitch/roll/acceleration with suspension travel data. Detects braking events (nose dive vs terrain compression), cornering loads, rough trail sections.
+## Firmware Changes Required (vs stock SST)
+
+- Move buttons from GP4/GP5 → GP6/GP7
+- Replace fork AS5600 I2C read (GP8/GP9) with SoftPot ADC read on GP26, scaled 0.0–1.0
+- Add LSM6DSOX IMU init and read on I2C0 (GP4/GP5 via STEMMA QT)
+- Add status LED outputs on GP10 (recording) and GP11 (WiFi)
+- WiFi: use `pico_cyw43_arch_lwip_poll` (NOT `threadsafe_background` — causes deadlocks)
+
+---
+
+## SoftPot Wiring Detail
+
+**Part:** Spectra Symbol SP-L-0200-103-1%-RLU
+**Connector:** RLU = 3-pin female latch-up housing on sensor tail
+**Pinout:** Pin 1 = End A (voltage high), Pin 2 = Wiper output, Pin 3 = End B (GND)
+
+**Protection circuit (on SoftPot sensor perfboard):**
+
+```
+3.3V ──→ SoftPot Pin 1 (End A)
+GND  ──→ SoftPot Pin 3 (End B)
+SoftPot Pin 2 (Wiper) ──→ 100Ω ──→ GP26
+                        └──→ 100nF ──→ GND
+                        └──→ 100kΩ ──→ GND
+```
+
+- 100Ω: protects ADC if wiper shorts to rail
+- 100nF: RC low-pass filter (~16kHz cutoff with 100Ω)
+- 100kΩ: pull-down, prevents float when stylus off active area (<2% non-linearity)
+- No-contact state reads ~0V (GND via pull-down)
+- Travel direction (which end reads high) correctable in firmware scaling
+
+**4-pin JST-GH connector standardization (all sensors use 4-pin):**
+
+SoftPot (3 wires + 1 NC):
+- Pin 1: 3.3V → SoftPot End A
+- Pin 2: GND → SoftPot End B
+- Pin 3: Signal (wiper) → GP26 via protection circuit
+- Pin 4: NC
+
+AS5600 (4 wires):
+- Pin 1: 3.3V → VCC
+- Pin 2: GND
+- Pin 3: SDA → GP14
+- Pin 4: SCL → GP15
+
+Color code cables to distinguish sensors (e.g. blue bundle for AS5600, red for SoftPot).
+
+---
+
+## Connector Architecture
+
+**External connectors:** JST-GH 1.25mm, 4-pin standardized
+- Sensor end: GHR-04V female crimp housing in 3D-printed bracket pocket
+- Box panel end: GHR-04V female crimp housing in 3D-printed panel pocket
+- Patch cable: GHR-04V female on both ends (female-female)
+- Board end (wing/sensor perfboard): BM04B-GHS-TBT SMD male header
+
+**Internal (board to panel):** short wire tails from BM04B header on Perma-Proto wing board to GHR female housing in panel pocket
+
+**STEMMA QT (IMU):** JST SH 1.0mm 4-pin, pre-made 150mm cable, plug-and-play
+
+---
+
+## Physical Build Architecture
+
+**Main control box:**
+- Stack (LiPo shim → Pico WH → Adalogger) as self-contained unit
+- Adafruit half-size Perma-Proto (#1609) as wing board alongside stack
+  - Short wires reflowed into Adalogger duplicate pad stubs for connection
+  - Power rails carry 3.3V and GND for all connections
+  - BM04B-GHS-TBT SMD headers for sensor cable connections (×2: AS5600 + SoftPot)
+  - Button and LED connections
+- 3D-printed enclosure with Garmin quarter-turn mount on bottom
+- GHR female JST-GH housings in 3D-printed panel pockets on enclosure wall
+- Rubber grommets at cable wall penetrations
+
+**Sensor modules:**
+- ElectroCookie solderable perfboard, one per sensor
+- BM04B-GHS-TBT SMD header for cable connection
+- Protection circuit components (SoftPot only)
+- 3D-printed bracket holds perfboard and mounts to bike
+
+---
+
+## Crimp Tool & Connectors
+
+- **Crimper:** PEBA kit (includes crimper + JST-GH housings + contacts, AWG 32-22)
+- **Wire:** 28AWG silicone multi-color (TUOFENG or BNTECHGO, 6-10 colors)
+- **Sleeving:** 1/8" expandable PET braided sleeving for sensor cable runs
+- **PCB headers:** BM04B-GHS-TBT (Mouser, qty 8)
+
+---
+
+## I2C Address Map
+
+| Device | Bus | GPIO | Address |
+|---|---|---|---|
+| LSM6DSOX IMU | I2C0 (STEMMA QT) | GP4/GP5 | 0x6A or 0x6B |
+| AS5600 rear shock | I2C1 | GP14/GP15 | 0x36 |
+| SSD1306 display | PIO I2C | GP2/GP3 | 0x3C or 0x3D |
+
+No address conflicts.
+
+---
+
+## Next Steps
+
+1. [ ] Place Mouser order (BM04B headers, LSM6DSOX, Perma-Proto, resistors)
+2. [ ] Place Amazon order (PEBA crimp kit, 28AWG wire, 1/8" braided sleeving, ElectroCookie boards, helping hands)
+3. [ ] Flash stock SST firmware, validate display and I2C scan
+4. [ ] Wire AS5600 to GP14/GP15, validate rear shock channel in dashboard
+5. [ ] Wire SoftPot with protection circuit, modify firmware for ADC read on GP26
+6. [ ] Move button pins to GP6/GP7 in firmware
+7. [ ] Add status LED outputs GP10/GP11 in firmware
+8. [ ] Validate full pipeline: both sensors → SD → WiFi → gosst → dashboard (Pi at 192.168.0.69)
+9. [ ] Design 3D printed bench test jigs (AS5600 rotation jig, SoftPot sliding jig)
+10. [ ] Design enclosure and sensor brackets in OpenSCAD
+11. [ ] Add LSM6DSOX IMU integration once sensor pipeline validated
+12. [ ] Mount on bike, validate real-world data
 
 ---
 
@@ -124,95 +261,6 @@ WiFi on the Pico W is unstable with persistent connections. Use:
 
 ---
 
-## Connectors & Wiring
-
-### External connectors (panel mount on enclosure)
-- **Type:** M8 circular, IP67/IP68, screw lock
-- **Softpot cable:** M8 3-pin
-- **AS5600 cable:** M8 4-pin
-- **Sources:** DigiKey, Mouser, RS Components — search "M8 panel mount female 4 pin IP67"
-- **Brands:** Phoenix Contact, Binder, Weidmuller (all interchangeable)
-- **Vibration note:** Apply silicone RTV or medium threadlock to screw collar to prevent backing off
-- **Pre-made cables:** M8 sensor cables with moulded male connectors available cheaply — saves crimping cable side
-
-### Internal wiring
-- **Wire:** 28AWG silicone-jacket stranded (flexible, cold-crack resistant)
-- **IMU:** Direct solder to PCB, no connector
-- **Fork cable routing:** Service loop at crown, braided sleeve on exposed section
-
-### Wire counts
-| Sensor | Wires | Pins |
-|---|---|---|
-| AS5600 (I2C) | VCC, GND, SDA, SCL | 4 |
-| SoftPot (analog) | VCC, GND, signal | 3 |
-| IMU | Internal to PCB | — |
-
-**Efficiency option:** Single 5-pin cable from box splitting to both sensors (shared VCC+GND, I2C×2, analog×1). Useful if frame routing space is limited.
-
----
-
-## Prototyping Setup
-
-**Initial bench testing uses a breadboard and jumper cables** — no soldering required at this stage.
-
-- Pico WH has pre-soldered headers, seats directly in a standard breadboard
-- All sensors connected via jumper cables (female-to-male for breakout boards)
-- Suggested I2C bus wiring (all devices share):
-
-| Signal | Pico Pin | Connected To |
-|---|---|---|
-| SDA | GP4 | AS5600 SDA, SSD1306 SDA |
-| SCL | GP5 | AS5600 SCL, SSD1306 SCL |
-| 3.3V | 3V3 OUT | AS5600 VCC, SSD1306 VCC, SoftPot end A |
-| GND | GND | AS5600 GND, SSD1306 GND, SoftPot end B |
-| ADC | GP26 | SoftPot wiper (via 100Ω series resistor) |
-
-- Add 100nF cap from GP26 to GND on breadboard for SoftPot noise filtering
-- I2C pull-ups: AS5600 breakout boards typically include on-board pull-ups — check before adding external ones to avoid conflict
-- USB power sufficient for all bench testing — no LiPo shim needed yet
-
----
-
-## Bench Test Workflow (start here)
-
-### Phase 1 — Validate full software stack (no new code)
-1. Flash stock SST firmware to Pico W
-2. Set up gosst backend (Docker Compose)
-3. Wire AS5600 to Pico (I2C: SDA→GP4, SCL→GP5, 3.3V, GND)
-4. 3D print rotation jig (see below)
-5. Move jig by hand, confirm travel plot appears in dashboard
-6. **Goal:** Prove firmware → SD → WiFi → gosst → dashboard pipeline works end to end
-
-### Phase 2 — Add SoftPot (minimal firmware change)
-1. Wire SoftPot to Pico ADC (GP26 recommended)
-2. Modify firmware: replace second encoder read with `adc_read()`, scale to 0.0–1.0
-3. 3D print sliding stylus jig (see below)
-4. Test both sensors simultaneously, verify both channels in dashboard
-
-### Phase 3 — Combined validation
-1. Generate fake session moving both sensors by hand
-2. Confirm dashboard shows both fork and shock channels
-3. Go/no-go before designing real bike mounts
-
----
-
-## 3D Print — Bench Test Jigs
-
-### AS5600 rotation jig
-- **Pivot:** M4 or M5 bolt shank through close-tolerance hole (metal-on-metal surface). OR press-fit Igus xiros polymer 608-equivalent bearing.
-- **Magnet holder:** Boss with blind pocket for magnet (6mm × 2.5mm diametrically magnetized disc), centered over AS5600. Controlled 1–1.5mm airgap.
-- **Lever arm:** 80–100mm long for smooth manual sweep
-- **Base plate:** AS5600 breakout mounted flat, alignment posts, bench clamp hole
-- **Arc markings:** Reference angles on base for repeatability
-
-### SoftPot sliding stylus jig
-- Flat backing plate, length of SoftPot (e.g. 150mm)
-- Sliding carriage with 3mm proud stylus nub
-- Optional return spring to simulate fork rebound
-- SoftPot wired: 3.3V → end A, GND → end B, wiper → GP26 with 100Ω + 100nF
-
----
-
 ## Related Projects / Reference Repos
 
 | Repo | Notes |
@@ -221,15 +269,3 @@ WiFi on the Pico W is unstable with persistent connections. Use:
 | `porast1/suspension-telemetry` | STM32, FreeRTOS, DMA ADC at 200Hz. Good signal processing reference |
 | `JoelKuula/Suspension_telemetry_public` | Has 3D-printable STL bracket files |
 | `Finnitio/sst` | Another SST fork, check for modifications |
-
----
-
-## Open Questions / Next Steps
-
-- [ ] Check all linkage pivot angles on Regulator CX in person — find highest-angle accessible pivot
-- [ ] Confirm pivot bolt hex sizes on both bikes (M6 or M8 hex head?)
-- [ ] Research ICM-42688-P breakout board options
-- [ ] Write SoftPot ADC firmware patch (~20 lines, replacing encoder read)
-- [ ] Design AS5600 pivot mount for 3D printing (iglide J bore size, hex socket taper geometry)
-- [ ] Set up gosst backend and test Docker Compose deployment
-- [ ] Enter bike geometry for Regulator CX and Canyon Torque in gosst
