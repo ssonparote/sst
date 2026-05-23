@@ -84,3 +84,4 @@ node_modules
 # Fronted packaged JavaScript
 dashboard/app/static/main.js
 dashboard/app/static/main.js.map
+.DS_Store
