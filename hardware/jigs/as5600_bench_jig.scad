@@ -6,129 +6,133 @@
 $fn = 60;
 
 // ── Board dimensions ──────────────────────────────────────────────
-board_w       = 23;     // PCB width
-board_d       = 23;     // PCB depth
-board_h       = 1.6;    // PCB thickness
-chip_h        = 1.0;    // AS5600 package height above PCB top
-chip_cx       = 11.5;   // chip center X from PCB corner (assumed centered)
-chip_cy       = 11.5;   // chip center Y from PCB corner
+board_w          = 23;      // PCB width mm
+board_d          = 23;      // PCB depth mm
+board_h          = 1.75;    // PCB thickness (measured)
 
-// Mounting holes: M2, 2mm inset from each corner edge → 19×19mm pitch
-hole_d        = 2.0;
-hole_inset    = 2.0;
-peg_d         = 1.85;   // alignment peg diameter (press-fit into M2 hole)
-peg_h         = 2.5;
+// Mounting holes: 3.5mm dia, hole EDGE 2mm from PCB edge
+//   → hole centre is 2 + 3.5/2 = 3.75mm from each PCB edge
+hole_d           = 3.5;
+hole_cx_inset    = 3.75;    // hole centre distance from PCB edge
+peg_d            = 3.0;     // alignment post dia (0.25mm clearance in 3.5mm hole)
+peg_h            = 3.0;
+
+// ── Height measurements — all relative to breadboard surface = z=0 ─
+// (holder bottom sits on breadboard, so holder coords = absolute coords)
+ledge_z          = 2.5;     // PCB bottom rests here  (4.2 - 1.75 = 2.45, rounded)
+pcb_top_z        = ledge_z + board_h;   // 4.25
+chip_top_z       = 6.5;                 // measured chip top above breadboard
 
 // ── Holder geometry ───────────────────────────────────────────────
-wall_t        = 2.0;    // corner post wall thickness
-inner_clear   = 0.4;    // total clearance around PCB (0.2mm per side)
-inner_w       = board_w + inner_clear;
-inner_d       = board_d + inner_clear;
+wall_t           = 2.0;
+inner_clear      = 0.4;     // total XY clearance around PCB (0.2 per side)
+inner_w          = board_w + inner_clear;
+inner_d          = board_d + inner_clear;
+outer_w          = inner_w + 2 * wall_t;
+outer_d          = inner_d + 2 * wall_t;
 
-ledge_t       = 1.0;    // ledge width that PCB rests on
-ledge_z       = 3.0;    // ledge height from holder bottom (breadboard clearance)
+ledge_t          = 1.0;     // ledge depth (PCB lip)
 
-// Height stack: ledge_z + board_h + chip_h + clearance → top plate bottom
-chip_clearance     = 0.5;
-top_plate_bottom_z = ledge_z + board_h + chip_h + chip_clearance;  // 6.1
-top_plate_t        = 2.5;
-top_plate_top_z    = top_plate_bottom_z + top_plate_t;              // 8.6
-holder_h           = top_plate_top_z;
+// Chip centre in holder XY coords
+chip_cx          = 11.5;
+chip_cy          = 11.5;
+cx               = wall_t + chip_cx;    // 13.5
+cy               = wall_t + chip_cy;    // 13.5
 
-chip_hole_d   = 7.0;    // hole above AS5600 chip in top plate
+chip_hole_d      = 7.0;
 
-clamp_slot_w  = 4.0;    // binder-clip slot on one wall
-clamp_slot_d  = 2.0;
+// Top plate height: bottom clears chip top; thick enough so post length
+// equals pocket depth with a little to spare.
+chip_clearance   = 0.5;
+target_airgap    = 1.0;     // magnet bottom to chip top (mm)
+magnet_h_actual  = 2.5;     // magnet physical height
+pocket_depth     = magnet_h_actual + 0.5;   // 3.0 — 0.5mm push room
+post_length      = pocket_depth + 0.5;      // 3.5 — post slightly longer than pocket
+
+magnet_bottom_z  = chip_top_z + target_airgap;          // 7.5
+top_plate_top_z  = magnet_bottom_z + post_length;        // 11.0
+top_plate_btm_z  = chip_top_z + chip_clearance;          // 7.0
+top_plate_t      = top_plate_top_z - top_plate_btm_z;    // 4.0
+holder_h         = top_plate_top_z;                       // 11.0
+
+// ── Degree marks (debossed into top plate surface) ────────────────
+mark_depth       = 0.4;
+mark_inner_r     = chip_hole_d / 2 + 1.0;  // start just outside chip hole
+// minor = every 10°, major = every 30°
+mark_minor_w     = 0.5;    mark_minor_l = 4.5;
+mark_major_w     = 0.8;    mark_major_l = 8.5;
 
 // ── Magnet post geometry ──────────────────────────────────────────
-post_od       = 6.4;    // fits in 7mm hole with 0.3mm clearance per side
-post_length   = 4.5;    // hangs below flange; gives 1.5mm airgap (see plan)
+post_od          = 6.4;    // 0.3mm clearance per side in 7mm hole
+magnet_d         = 4.0;    // press-fit for 3.97mm magnet
+eject_hole_d     = 1.0;    // through-hole for ejection pin
 
-magnet_d      = 4.0;    // pocket diameter (press-fit for 3.97mm magnet)
-magnet_depth  = 2.5;    // actual magnet height
-pocket_depth  = magnet_depth + 0.5;  // 3.0mm — 0.5mm push room
-eject_hole_d  = 1.0;    // through-hole above pocket for ejection pin
+flange_d         = 16.0;
+flange_t         = 2.5;
 
-flange_d      = 16.0;
-flange_t      = 2.5;
-
-arm_length    = 90.0;
-arm_w         = 8.0;
-arm_h         = 4.0;
+arm_length       = 90.0;
+arm_w            = 8.0;
+// arm thickness = flange_t (arm is coplanar with flange, same Z plane)
 
 
 // ═══════════════════════════════════════════════════════════════════
 // MODULE: board_holder
-// Origin: bottom-left-bottom corner of the holder outer envelope.
-// The PCB sits at ledge_z with its bottom face on the ledges.
+// Origin: holder bottom-front-left corner = breadboard surface level.
 // ═══════════════════════════════════════════════════════════════════
 module board_holder() {
-    outer_w = inner_w + 2 * wall_t;
-    outer_d = inner_d + 2 * wall_t;
-
     difference() {
         union() {
-            // ── Four L-profile corner posts ──────────────────────
-            // Each post is a solid wall_t × (wall_t + ledge_t) rectangle
-            // minus the open inner area above the ledge.
-            // Built as: full-height outer solid - inner void above ledge.
-            //
-            // Simpler: four corner solids, then subtract the center void.
-
-            // Full-height corner blocks at each corner
+            // ── Four full-height corner posts ─────────────────────
             for (x = [0, inner_w + wall_t], y = [0, inner_d + wall_t]) {
                 translate([x, y, 0])
                     cube([wall_t, wall_t, holder_h]);
             }
 
-            // Connect adjacent corners with thin ledge rails along each side.
-            // Each rail is wall_t wide, ledge_t tall, running between posts.
-            // Bottom ledge rails (PCB seat)
-            translate([wall_t, 0,           ledge_z - ledge_t])
+            // ── Ledge rails (PCB seat) ────────────────────────────
+            translate([wall_t, 0,                 ledge_z - ledge_t])
                 cube([inner_w, ledge_t, ledge_t]);
-            translate([wall_t, inner_d + wall_t, ledge_z - ledge_t])
+            translate([wall_t, inner_d + wall_t,  ledge_z - ledge_t])
                 cube([inner_w, ledge_t, ledge_t]);
-            translate([0,      wall_t,           ledge_z - ledge_t])
+            translate([0,      wall_t,             ledge_z - ledge_t])
                 cube([ledge_t, inner_d, ledge_t]);
-            translate([inner_w + wall_t, wall_t, ledge_z - ledge_t])
+            translate([inner_w + wall_t, wall_t,  ledge_z - ledge_t])
                 cube([ledge_t, inner_d, ledge_t]);
 
-            // ── Top plate ────────────────────────────────────────
-            translate([0, 0, top_plate_bottom_z])
+            // ── Top plate (flat) ──────────────────────────────────
+            translate([0, 0, top_plate_btm_z])
                 cube([outer_w, outer_d, top_plate_t]);
-
-            // ── Clamp slot tab on front wall (Y=0 side) ──────────
-            // Extra 2mm-tall wall section so a binder clip has something to grip.
-            clamp_tab_h = 6.0;
-            translate([outer_w/2 - clamp_slot_w/2, 0, holder_h])
-                cube([clamp_slot_w, wall_t + 2, clamp_tab_h]);
         }
 
-        // ── Chip hole in top plate ────────────────────────────────
-        translate([wall_t + chip_cx, wall_t + chip_cy, top_plate_bottom_z - 0.01])
+        // ── Chip hole ─────────────────────────────────────────────
+        translate([cx, cy, top_plate_btm_z - 0.01])
             cylinder(d = chip_hole_d, h = top_plate_t + 0.02);
 
-        // ── Alignment peg holes in top plate (poke down onto PCB holes) ──
-        // PCB mounting hole centres relative to PCB corner:
-        //   (hole_inset, hole_inset), (board_w-hole_inset, hole_inset), etc.
-        // In holder coords: add wall_t offset for PCB corner.
-        for (px = [hole_inset, board_w - hole_inset],
-             py = [hole_inset, board_d - hole_inset]) {
-            translate([wall_t + px, wall_t + py, top_plate_bottom_z - 0.01])
+        // ── Peg holes through top plate ───────────────────────────
+        // Hole centres: hole_cx_inset from each PCB edge, offset by wall_t
+        for (px = [hole_cx_inset, board_w - hole_cx_inset],
+             py = [hole_cx_inset, board_d - hole_cx_inset]) {
+            translate([wall_t + px, wall_t + py, top_plate_btm_z - 0.01])
                 cylinder(d = peg_d, h = top_plate_t + peg_h + 0.02);
         }
 
-        // ── Clamp slot cutout in tab ─────────────────────────────
-        translate([outer_w/2 - clamp_slot_w/2 + (clamp_slot_w - clamp_slot_d)/2,
-                   -0.01,
-                   holder_h + 1.0])
-            cube([clamp_slot_d, wall_t + 2 + 0.02, 4.0]);
+        // ── Degree marks (debossed on top surface) ────────────────
+        // 0° = +X direction; rotate CCW for positive angles (standard math).
+        for (deg = [0 : 10 : 350]) {
+            is_major = (deg % 30 == 0);
+            mlen = is_major ? mark_major_l : mark_minor_l;
+            mwid = is_major ? mark_major_w : mark_minor_w;
+
+            translate([cx, cy, top_plate_top_z - mark_depth])
+            rotate([0, 0, deg])
+            translate([mark_inner_r, -mwid / 2, 0])
+                cube([mlen, mwid, mark_depth + 0.01]);
+        }
     }
 
-    // ── Alignment pegs (solid, point down from top plate underside) ──
-    for (px = [hole_inset, board_w - hole_inset],
-         py = [hole_inset, board_d - hole_inset]) {
-        translate([wall_t + px, wall_t + py, ledge_z + board_h])
+    // ── Alignment pegs (hang down from top plate underside) ───────
+    for (px = [hole_cx_inset, board_w - hole_cx_inset],
+         py = [hole_cx_inset, board_d - hole_cx_inset]) {
+        translate([wall_t + px, wall_t + py, pcb_top_z])
             cylinder(d = peg_d, h = peg_h);
     }
 }
@@ -136,44 +140,47 @@ module board_holder() {
 
 // ═══════════════════════════════════════════════════════════════════
 // MODULE: magnet_post
-// Origin: centre of flange bottom face.
-// Post hangs downward (negative Z). Arm extends in +X direction.
-// Print with arm flat on build plate (rotate 180° around X before slicing).
+// Origin: centre of flange bottom face (= pivot axis centre).
+//
+// Arm offset: one long edge of the arm lies on the pivot centre line
+// (Y=0). Rotate the post until that edge aligns with a degree mark
+// to read the angle directly off the dial.
+//
+// Print orientation: arm flat on build plate (rotate 180° in slicer).
 // ═══════════════════════════════════════════════════════════════════
 module magnet_post() {
     difference() {
         union() {
-            // ── Flange ───────────────────────────────────────────
+            // ── Full flange disc ──────────────────────────────────
             cylinder(d = flange_d, h = flange_t);
 
             // ── Post (hangs below flange) ─────────────────────────
             translate([0, 0, -post_length])
                 cylinder(d = post_od, h = post_length);
 
-            // ── Arm (extends from flange top, centred, +X) ───────
-            translate([0, -arm_w/2, flange_t])
-                cube([arm_length, arm_w, arm_h]);
-
-            // Small chamfer block to blend arm into flange
-            translate([0, -arm_w/2, flange_t])
-                cube([flange_d/2, arm_w, arm_h]);
+            // ── Arm ───────────────────────────────────────────────
+            // Same Z plane and thickness as the flange — one flat
+            // bottom surface, no step. One long edge at Y=0 (pivot
+            // centre line) for reading angles against the degree marks.
+            translate([0, 0, 0])
+                cube([arm_length, arm_w, flange_t]);
         }
 
-        // ── Magnet pocket (blind hole at post bottom) ─────────────
+        // ── Magnet pocket (blind, at post bottom) ─────────────────
         translate([0, 0, -post_length - 0.01])
             cylinder(d = magnet_d, h = pocket_depth + 0.01);
 
-        // ── Ejection through-hole (1mm dia, from arm top down to pocket) ──
+        // ── Ejection through-hole (1mm, vertical through top surface) ──
+        // Enters at top of flange/arm surface, exits above magnet pocket.
         translate([0, 0, -post_length + pocket_depth])
             cylinder(d = eject_hole_d,
-                     h = post_length - pocket_depth + flange_t + arm_h + 0.02);
+                     h = post_length - pocket_depth + flange_t + 0.02);
     }
 }
 
 
 // ═══════════════════════════════════════════════════════════════════
-// Render — both parts side by side for reference.
-// Comment out one module to isolate a single part for export/slicing.
+// Render — side by side. Comment out one to isolate for export.
 // ═══════════════════════════════════════════════════════════════════
 board_holder();
 
