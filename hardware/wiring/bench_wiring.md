@@ -1,131 +1,124 @@
 # SST Bench Test Wiring
 
-Breadboard wiring for bench validation using the full stack:
-**LiPo Shim (bottom) → Pico WH → Adalogger PicoWbell (top)**.
+## Stack (top to bottom)
 
-The Adalogger is stacked on top of the Pico, blocking access to the
-underside pins. All Adalogger-managed pins are marked with `*` below —
-do not wire these manually.
+```
+  ┌─────────────────────────────┐  ← USB connector, BOOTSEL btn, chips (all visible on top)
+  │         PICO WH             │
+  └──┬──┬──┬──┬──┬──┬──┬──┬───┘  ← male headers pointing down
+     │  │  │  │  │  │  │  │
+  ┌──┴──┴──┴──┴──┴──┴──┴──┴───┐  ← LiPo Shim (sandwiched, soldered to Pico headers)
+  └──┬──┬──┬──┬──┬──┬──┬──┬───┘
+     │  │  │  │  │  │  │  │
+  ┌──┴──┴──┴──┴──┴──┴──┴──┴───┐  ← female headers facing up
+  │    Adalogger PicoWbell     │     (MicroSD, RTC, STEMMA QT — all hidden underneath)
+  └─────────────────────────────┘
+```
+
+The Adalogger manages GP4, GP5, GP17–GP22 internally.
+Do not wire these pins — they are marked `*` below.
 
 ---
 
-## Pico WH pinout (USB end at top)
+## Full wiring diagram
 
 ```
-                          .------- USB -------.
-                          |      PICO WH       |
-                          |   (Adalogger on    |
-                          |    top, stacked)   |
-  UART debug --- GP0   1 -|                   |- 40  VBUS
-  UART debug --- GP1   2 -|                   |- 39  VSYS
-                 GND   3 -|                   |- 38  GND ----------- GND rail
-  SSD1306 SDA -- GP2   4 -|                   |- 37  3V3_EN
-  SSD1306 SCL -- GP3   5 -|                   |- 36  3V3 OUT ------- 3V3 rail
-     * IMU SDA - GP4   6 -|                   |- 35  ADC_VREF
-     * IMU SCL - GP5   7 -|                   |- 34  GP28/ADC2 free
-                 GND   8 -|                   |- 33  AGND
-    BTN LEFT --- GP6   9 -|                   |- 32  GP27/ADC1 free
-    BTN RIGHT -- GP7  10 -|                   |- 31  GP26/ADC0 ----- SoftPot wiper
-    free         GP8  11 -|                   |- 30  RUN
-    free         GP9  12 -|                   |- 29  * GP22 SDIO D3
-                 GND  13 -|                   |- 28  GND
-  LED rec (red) GP10  14 -|                   |- 27  * GP21 SDIO D2
-  LED WiFi(grn) GP11  15 -|                   |- 26  * GP20 SDIO D1
-    free        GP12  16 -|                   |- 25  * GP19 SDIO D0
-    free        GP13  17 -|                   |- 24  * GP18 SDIO CMD
-                 GND  18 -|                   |- 23  GND
-  AS5600 SDA -- GP14  19 -|                   |- 22  * GP17 SDIO CLK
-  AS5600 SCL -- GP15  20 -|                   |- 21  free GP16
-                          '-------------------'
-
-  * = managed by Adalogger PicoWbell — do not wire manually
-```
-
----
-
-## SSD1306 OLED (128×64, I2C 0x3C)
-
-Uses PIO software I2C — not on the hardware I2C buses.
-
-```
-Pico pin 36  3V3 OUT ─── VCC
-Pico pin  3  GND     ─── GND
-Pico pin  4  GP2     ─── SDA
-Pico pin  5  GP3     ─── SCL
-```
-
-Most SSD1306 breakouts include on-board pull-ups. Do not add external ones.
-
----
-
-## AS5600 Rotary Sensor (I2C1 0x36)
-
-```
-Pico pin 36  3V3 OUT ─── VCC
-Pico pin  3  GND     ─── GND
-Pico pin 19  GP14    ─── SDA
-Pico pin 20  GP15    ─── SCL
-```
-
-AS5600 breakouts include on-board pull-ups. Do not add external ones.
-
----
-
-## SoftPot Linear Sensor (ADC0, GP26)
-
-Build this protection circuit on the breadboard between SoftPot and Pico:
-
-```
-3V3 ──────────────────────── SoftPot End A (Pin 1)
-GND ──────────────────────── SoftPot End B (Pin 3)
-
-SoftPot Wiper (Pin 2)
-    |
-  [100Ω]
-    |
-    +──────────────────────── GP26 (Pico pin 31)
-    |
-    +── [100nF] ─── GND       RC low-pass filter, ~16 kHz cutoff
-    |
-    └── [100kΩ] ─── GND       pull-down, prevents float when stylus off track
-```
-
-- **100Ω** — protects ADC if wiper shorts to a rail
-- **100nF** — filters noise; place close to the Pico pin
-- **100kΩ** — holds ADC near 0 V when SoftPot is disconnected
-
----
-
-## Buttons (active-low, internal pull-up)
-
-One leg to GPIO, other leg to GND. No external resistor needed —
-firmware enables the Pico's internal pull-up.
-
-```
-Pico pin  9  GP6 ─── [BTN LEFT]  ─── GND
-Pico pin 10  GP7 ─── [BTN RIGHT] ─── GND
+                                    .──────── USB ────────.
+                                    │       PICO WH        │
+                                    │  (top face visible)  │
+               (free)  GP0   [1] ───┤                      ├─── [40]  VBUS
+               (free)  GP1   [2] ───┤                      ├─── [39]  VSYS
+             GND rail  GND   [3] ───┤                      ├─── [38]  GND ──────── GND rail
+          SSD1306 SDA  GP2   [4] ───┤                      ├─── [37]  3V3_EN
+          SSD1306 SCL  GP3   [5] ───┤                      ├─── [36]  3V3 OUT ──── 3V3 rail
+      * Adalogger IMU  GP4   [6] ───┤                      ├─── [35]  ADC_VREF
+      * Adalogger IMU  GP5   [7] ───┤                      ├─── [34]  GP28   (free)
+             GND rail  GND   [8] ───┤                      ├─── [33]  AGND
+            BTN LEFT   GP6   [9] ───┤                      ├─── [32]  GP27   (free)
+           BTN RIGHT   GP7  [10] ───┤                      ├─── [31]  GP26 ─── SoftPot (see A)
+               (free)  GP8  [11] ───┤                      ├─── [30]  RUN
+               (free)  GP9  [12] ───┤                      ├─── [29]  GP22 * Adalogger SDIO
+             GND rail  GND  [13] ───┤                      ├─── [28]  GND ──────── GND rail
+        LED record(R)  GP10 [14] ───┤                      ├─── [27]  GP21 * Adalogger SDIO
+          LED WiFi(G)  GP11 [15] ───┤                      ├─── [26]  GP20 * Adalogger SDIO
+               (free)  GP12 [16] ───┤                      ├─── [25]  GP19 * Adalogger SDIO
+               (free)  GP13 [17] ───┤                      ├─── [24]  GP18 * Adalogger SDIO
+             GND rail  GND  [18] ───┤                      ├─── [23]  GND ──────── GND rail
+          AS5600 SDA   GP14 [19] ───┤                      ├─── [22]  GP17 * Adalogger SDIO
+          AS5600 SCL   GP15 [20] ───┤                      ├─── [21]  GP16   (free)
+                                    '──────────────────────'
 ```
 
 ---
 
-## Status LEDs
+## Component connections
 
-LED anode → resistor → GPIO. Cathode to GND. GPIO HIGH = LED on.
-
+### SSD1306 OLED (I2C 0x3C)
 ```
-Pico pin 14  GP10 ─── [560Ω] ─── LED+ (red)   ─── LED- ─── GND
-Pico pin 15  GP11 ─── [560Ω] ─── LED+ (green) ─── LED- ─── GND
+  3V3 rail ──── VCC
+  GND rail ──── GND
+  GP2 pin  4 ── SDA
+  GP3 pin  5 ── SCL
 ```
-
-330Ω gives ~4 mA (brighter) if 560Ω is too dim.
+Breakout has on-board pull-ups — do not add external ones.
 
 ---
 
-## Button action summary
+### AS5600 rotary sensor (I2C 0x36)
+```
+  3V3 rail ──── VCC
+  GND rail ──── GND
+  GP14 pin 19 ── SDA
+  GP15 pin 20 ── SCL
+```
+Breakout has on-board pull-ups — do not add external ones.
+
+---
+
+### (A) SoftPot — GP26 protection circuit
+```
+  SoftPot End A (pin 1) ──── 3V3 rail
+  SoftPot End B (pin 3) ──── GND rail
+
+  SoftPot Wiper (pin 2)
+       │
+     [100Ω]
+       │
+       ├──────────────────── GP26  pin 31
+       │
+       ├──── [100nF] ──── GND rail      ← noise filter
+       │
+       └──── [100kΩ] ──── GND rail      ← pull-down (prevents float)
+```
+
+---
+
+### Buttons — active low, internal pull-up
+```
+  GP6  pin  9 ──── [BTN LEFT]  ──── GND rail
+  GP7  pin 10 ──── [BTN RIGHT] ──── GND rail
+```
+One leg to the GPIO, other leg to GND. No external resistor needed.
+
+---
+
+### Status LEDs
+```
+  GP10 pin 14 ──── [560Ω] ──── LED anode (+) ──── LED cathode (−) ──── GND rail
+                               red = recording
+
+  GP11 pin 15 ──── [560Ω] ──── LED anode (+) ──── LED cathode (−) ──── GND rail
+                               green = WiFi active
+```
+Use 330Ω instead of 560Ω for slightly brighter output (~4 mA vs ~2 mA).
+
+---
+
+## Button actions
 
 | Button | Press     | Action                                              |
 |--------|-----------|-----------------------------------------------------|
 | LEFT   | Short     | Start recording (idle) / Stop recording (recording) |
 | LEFT   | Long (1s) | Sync data to gosst server over WiFi                 |
 | RIGHT  | Short     | Sleep                                               |
-| RIGHT  | Long (1s) | **Set fork zero** — hold with fork at full extension |
+| RIGHT  | Long (1s) | Set fork zero — hold with fork at full extension    |
