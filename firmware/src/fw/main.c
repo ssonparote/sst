@@ -119,6 +119,7 @@ static const uint16_t SAMPLE_RATE = 1000;
 
 static volatile bool have_fork;
 static volatile bool have_shock;
+static volatile uint16_t fork_zero = 0;
 
 // We are using two buffers. Data acquisition happens on core #1 into the active
 // buffer (referred to by the pointer active_buffer) and we dump to Micro SD card
@@ -148,7 +149,8 @@ static bool data_acquisition_cb(repeating_timer_t *rt) {
 
     if (have_fork) {
         adc_select_input(FORK_ADC_INPUT);
-        active_buffer[count].fork_angle = adc_read();
+        uint16_t raw = adc_read();
+        active_buffer[count].fork_angle = (raw >= fork_zero) ? (raw - fork_zero) : 0;
     } else {
         active_buffer[count].fork_angle = 0xffff;
     }
@@ -342,6 +344,7 @@ static void on_rec_start() {
     }
 
     state = RECORD;
+    gpio_put(LED_RECORDING, 1);
     char msg[8];
     sprintf(msg, "REC:%s|%s", have_fork ? "F" : ".", have_shock ? "S" : ".");
     display_message(&disp, msg);
@@ -362,6 +365,7 @@ static void on_rec_start() {
 
 static void on_rec_stop() {
     state = IDLE;
+    gpio_put(LED_RECORDING, 0);
     display_message(&disp, "IDLE");
     cancel_repeating_timer(&data_acquisition_timer);
 
@@ -371,6 +375,7 @@ static void on_rec_stop() {
 }
 
 static void on_sync_data() {
+    gpio_put(LED_WIFI, 1);
     display_message(&disp, "CONNECT");
     if (!wifi_connect(true)) {
         display_message(&disp, "CONN ERR");
@@ -426,6 +431,7 @@ static void on_sync_data() {
         sleep_ms(3000);
     }
     wifi_disconnect();
+    gpio_put(LED_WIFI, 0);
     state = IDLE;
 }
 
@@ -468,6 +474,7 @@ static void on_idle() {
 }
 
 static void on_sync_time() {
+    gpio_put(LED_WIFI, 1);
     display_message(&disp, "CONNECT");
     if (!wifi_connect(false)) {
         display_message(&disp, "CONN ERR");
@@ -480,6 +487,7 @@ static void on_sync_time() {
         }
     }
     wifi_disconnect();
+    gpio_put(LED_WIFI, 0);
     state = IDLE;
 }
 
@@ -525,6 +533,16 @@ static void on_msc() {
 static void dummy() {
 }
 
+static void on_set_zero() {
+    adc_select_input(FORK_ADC_INPUT);
+    fork_zero = adc_read();
+    char msg[12];
+    snprintf(msg, sizeof(msg), "ZERO %4d", fork_zero);
+    display_message(&disp, msg);
+    sleep_ms(1000);
+    state = IDLE;
+}
+
 static void (*state_handlers[STATES_COUNT])() = {
     on_idle,      /* IDLE */
     on_sleep,     /* SLEEP */
@@ -534,7 +552,8 @@ static void (*state_handlers[STATES_COUNT])() = {
     on_rec_stop,  /* REC_STOP */
     on_sync_time, /* SYNC_TIME */
     on_sync_data, /* SYNC_DATA */
-    on_msc        /* MSC */
+    on_msc,       /* MSC */
+    on_set_zero,  /* SET_ZERO */
 };
 
 // ----------------------------------------------------------------------------
@@ -576,7 +595,7 @@ static void on_right_press(void *user_data) {
 static void on_right_longpress(void *user_data) {
     switch(state) {
         case IDLE:
-            state = SYNC_TIME;
+            state = SET_ZERO;
             break;
         default:
             break;
@@ -593,6 +612,8 @@ int main() {
     rtc_init();
     adc_init();
     adc_gpio_init(FORK_ADC_PIN);
+    gpio_init(LED_RECORDING); gpio_set_dir(LED_RECORDING, GPIO_OUT); gpio_put(LED_RECORDING, 0);
+    gpio_init(LED_WIFI);      gpio_set_dir(LED_WIFI,      GPIO_OUT); gpio_put(LED_WIFI,      0);
 #ifndef NDEBUG
     stdio_uart_init();
 #endif

@@ -18,8 +18,9 @@ enum state {
     SYNC_TIME,
     SYNC_DATA,
     MSC,
+    SET_ZERO,
 };
-#define STATES_COUNT 9
+#define STATES_COUNT 10
 
 struct header {
     char magic[3];

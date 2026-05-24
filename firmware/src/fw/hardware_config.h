@@ -23,6 +23,12 @@
 #define BUTTON_RIGHT     7
 
 // ----------------------------------------------------------------------------
+// Status LEDs
+
+#define LED_RECORDING   10    // GP10, red,   560Ω series resistor
+#define LED_WIFI        11    // GP11, green, 560Ω series resistor
+
+// ----------------------------------------------------------------------------
 // Display
 
 #define DISPLAY_WIDTH    128
