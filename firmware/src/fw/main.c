@@ -16,6 +16,7 @@
 #include "pico/util/datetime.h"
 #include "hardware/clocks.h"
 #include "hardware/adc.h"
+#include "pico/runtime_init.h"
 #include "hardware/rtc.h"
 #include "hardware/rosc.h"
 #include "hardware/timer.h"
@@ -146,7 +147,8 @@ static bool data_acquisition_cb(repeating_timer_t *rt) {
     }
 
     if (have_fork) {
-        active_buffer[count].fork_angle = as5600_get_scaled_angle(FORK_I2C);
+        adc_select_input(FORK_ADC_INPUT);
+        active_buffer[count].fork_angle = adc_read();
     } else {
         active_buffer[count].fork_angle = 0xffff;
     }
@@ -259,12 +261,6 @@ static void data_storage_core1() {
 // Setup functions
 
 static void setup_i2c() {
-    i2c_init(FORK_I2C, 1000000);
-    gpio_set_function(FORK_PIN_SDA, GPIO_FUNC_I2C);
-    gpio_set_function(FORK_PIN_SCL, GPIO_FUNC_I2C);
-    gpio_pull_up(FORK_PIN_SDA);
-    gpio_pull_up(FORK_PIN_SCL);
-
     i2c_init(SHOCK_I2C, 1000000);
     gpio_set_function(SHOCK_PIN_SDA, GPIO_FUNC_I2C);
     gpio_set_function(SHOCK_PIN_SCL, GPIO_FUNC_I2C);
@@ -293,15 +289,14 @@ static bool setup_baseline(i2c_inst_t *i2c) {
 
 static bool setup_sensors() {
     absolute_time_t timeout = make_timeout_time_ms(3000);
-    while (!((as5600_connected(FORK_I2C) && as5600_detect_magnet(FORK_I2C)) ||
-            (as5600_connected(SHOCK_I2C) && as5600_detect_magnet(SHOCK_I2C)))) {
+    while (!(as5600_connected(SHOCK_I2C) && as5600_detect_magnet(SHOCK_I2C))) {
         if (absolute_time_diff_us(get_absolute_time(), timeout) < 0) {
-            return false;
+            break;
         }
         sleep_ms(10);
     }
 
-    have_fork = setup_baseline(FORK_I2C);
+    have_fork = true;  // SoftPot on ADC0 (GP26), always available
     have_shock = setup_baseline(SHOCK_I2C);
     return have_fork || have_shock;
 }
@@ -464,9 +459,7 @@ static void on_idle() {
         ssd1306_clear(&disp);
         ssd1306_draw_string(&disp, 96,  0, 1, battery_str);
         ssd1306_draw_string(&disp,   0, 0, 2, time_str);
-        if (as5600_connected(FORK_I2C) && as5600_detect_magnet(FORK_I2C)) {
-            ssd1306_draw_string(&disp,  0, 24, 1, "fork");
-        }
+        ssd1306_draw_string(&disp,  0, 24, 1, "fork");
         if (as5600_connected(SHOCK_I2C) && as5600_detect_magnet(SHOCK_I2C)) {
             ssd1306_draw_string(&disp, 40, 24, 1, "shock");
         }
@@ -599,6 +592,7 @@ int main() {
     tusb_init();
     rtc_init();
     adc_init();
+    adc_gpio_init(FORK_ADC_PIN);
 #ifndef NDEBUG
     stdio_uart_init();
 #endif

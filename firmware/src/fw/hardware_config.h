@@ -19,8 +19,8 @@
 // ----------------------------------------------------------------------------
 // Buttons
 
-#define BUTTON_LEFT      4
-#define BUTTON_RIGHT     5
+#define BUTTON_LEFT      6
+#define BUTTON_RIGHT     7
 
 // ----------------------------------------------------------------------------
 // Display
@@ -62,11 +62,12 @@
 #endif // SPI_MICROSD
 
 // ----------------------------------------------------------------------------
-// Fork and shock sensors
+// Fork sensor — SoftPot linear potentiometer on ADC0 (GP26)
 
-#define FORK_I2C         i2c0
-#define FORK_PIN_SDA     8
-#define FORK_PIN_SCL     9
+#define FORK_ADC_PIN    26
+#define FORK_ADC_INPUT   0
+
+// Shock sensor — AS5600 rotary encoder on I2C1 (GP14/GP15)
 
 #define SHOCK_I2C        i2c1
 #define SHOCK_PIN_SDA    14
